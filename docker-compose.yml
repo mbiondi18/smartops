@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: smartops-db
+    environment:
+      POSTGRES_DB: smartops
+      POSTGRES_USER: smartops
+      POSTGRES_PASSWORD: smartops123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smartops-app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/smartops
+      SPRING_DATASOURCE_USERNAME: smartops
+      SPRING_DATASOURCE_PASSWORD: smartops123
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-placeholder}
+      ANTHROPIC_API_ENABLED: ${ANTHROPIC_API_ENABLED:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

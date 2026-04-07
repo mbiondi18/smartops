@@ -1,0 +1,28 @@
+# Maven
+backend/target/
+*.class
+*.jar
+*.war
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+
+# Kubernetes secrets
+k8s/secret.yaml
+
+# Environment files
+.env
+*.env
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
