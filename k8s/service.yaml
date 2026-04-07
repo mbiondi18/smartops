@@ -3,11 +3,14 @@ kind: Service
 metadata:
   name: smartops-service
   namespace: default
+  labels:
+    app: smartops-app
 spec:
   type: LoadBalancer
   selector:
     app: smartops-app
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: 80
       targetPort: 8080

@@ -84,6 +84,12 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Micrometer Prometheus registry -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
         <!-- H2 for unit tests -->
         <dependency>
             <groupId>com.h2database</groupId>
