@@ -22,6 +22,10 @@ k8s/secret.yaml
 .env
 *.env
 
+# GCP service account keys
+gha-key.json
+*.json.key
+
 # Logs
 *.log
 *.ctxt
