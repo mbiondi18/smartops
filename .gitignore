@@ -3,6 +3,11 @@ backend/target/
 *.class
 *.jar
 *.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
 
 # Terraform
 **/.terraform/
@@ -16,6 +21,13 @@ k8s/secret.yaml
 # Environment files
 .env
 *.env
+
+# Logs
+*.log
+*.ctxt
+.mtj.tmp/
+hs_err_pid*
+replay_pid*
 
 # IDE
 .idea/
