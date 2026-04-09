@@ -1,0 +1,55 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: smartops-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: smartops.rules
+      rules:
+
+        # Alert when the app pod is down
+        - alert: SmartOpsAppDown
+          expr: absent(up{job="smartops-service"} == 1)
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "SmartOps Hub is down"
+            description: "No healthy pod has been detected for more than 1 minute."
+
+        # Alert when pod restarts too many times
+        - alert: SmartOpsPodRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="default", pod=~"smartops-app.*"}[10m]) > 3
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "SmartOps pod is crash-looping"
+            description: "Pod {{ $labels.pod }} restarted more than 3 times in 10 minutes."
+
+        # Alert when JVM heap memory exceeds 400MB
+        - alert: SmartOpsHighMemory
+          expr: jvm_memory_used_bytes{job="smartops-service", area="heap"} > 400000000
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "SmartOps high memory usage"
+            description: "JVM heap is above 400MB for more than 2 minutes (current: {{ $value | humanize }}B)."
+
+        # Alert when HTTP 5xx error rate exceeds 5%
+        - alert: SmartOpsHighErrorRate
+          expr: |
+            rate(http_server_requests_seconds_count{job="smartops-service", status=~"5.."}[5m])
+            /
+            rate(http_server_requests_seconds_count{job="smartops-service"}[5m])
+            > 0.05
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "SmartOps high HTTP error rate"
+            description: "More than 5% of requests are returning 5xx errors."
