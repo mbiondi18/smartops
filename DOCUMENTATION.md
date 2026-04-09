@@ -2,9 +2,9 @@
 
 ## What is this project?
 
-SmartOps Hub is a cloud-native task management API built as a portfolio project to demonstrate real-world software engineering skills across the full stack: backend development, cloud infrastructure, containerization, CI/CD automation, and observability.
+SmartOps Hub is a full-stack cloud-native task management application built as a portfolio project to demonstrate real-world software engineering skills across the full stack: backend development, frontend, authentication, cloud infrastructure, containerization, CI/CD automation, and observability.
 
-The app lets you create and manage tasks. When you trigger an AI analysis on a task, it calls Claude (Anthropic's AI) to automatically summarize the task and suggest a priority and category for it.
+Users register an account, log in, and manage their own tasks through a React UI. When you trigger an AI analysis on a task, it calls Claude (Anthropic's AI) to automatically summarize the task and suggest a priority and category for it.
 
 ---
 
@@ -50,15 +50,19 @@ Browser / Swagger UI
 |-------|-----------|-----|
 | Language | Java 17 | Stable LTS version with modern features |
 | Framework | Spring Boot 3.2 | Industry standard for Java REST APIs |
+| Auth | Spring Security + JWT | Stateless authentication — users log in and get a token |
 | Database | PostgreSQL 15 | Reliable relational DB, strong GCP support |
 | ORM | Hibernate / JPA | Maps Java objects to database tables automatically |
 | HTTP Client | WebFlux WebClient | Non-blocking HTTP client for calling Claude API |
+| Frontend | Next.js 14 + React | Full-stack React framework for the user interface |
+| Styling | Tailwind CSS | Utility CSS classes for fast UI development |
 | Container | Docker | Packages the app and all its dependencies into one image |
 | Orchestration | Kubernetes (GKE) | Runs and manages containers in production |
 | Infrastructure | Terraform | Defines all GCP resources as code |
 | CI/CD | GitHub Actions | Automates test → build → deploy on every push |
 | Registry | GCP Artifact Registry | Stores Docker images |
 | Monitoring | Prometheus + Grafana | Collects and displays app metrics |
+| Alerting | Alertmanager + Gmail | Sends email when something goes wrong |
 | API Docs | Swagger / OpenAPI | Auto-generated interactive API documentation |
 | AI | Claude Haiku (Anthropic) | Analyses tasks and suggests priority/category |
 
@@ -72,31 +76,56 @@ smartops-hub/
 │   ├── src/main/java/com/smartops/
 │   │   ├── SmartOpsApplication.java  # App entry point
 │   │   ├── controller/
-│   │   │   └── TaskController.java   # HTTP endpoints (REST API)
+│   │   │   ├── TaskController.java   # Task HTTP endpoints
+│   │   │   └── AuthController.java   # Register/login endpoints
 │   │   ├── service/
 │   │   │   ├── TaskService.java      # Business logic for tasks
+│   │   │   ├── UserService.java      # Register/login logic
 │   │   │   └── AiAnalysisService.java# Claude API integration
 │   │   ├── model/
-│   │   │   └── Task.java             # Database entity (table definition)
+│   │   │   ├── Task.java             # Task database entity
+│   │   │   └── User.java             # User database entity
 │   │   ├── dto/
-│   │   │   └── TaskDTO.java          # Request/response shapes
+│   │   │   ├── TaskDTO.java          # Task request/response shapes
+│   │   │   └── AuthDTO.java          # Auth request/response shapes
 │   │   ├── repository/
-│   │   │   └── TaskRepository.java   # Database queries
+│   │   │   ├── TaskRepository.java   # Task database queries
+│   │   │   └── UserRepository.java   # User database queries
 │   │   └── config/
-│   │       └── GlobalExceptionHandler.java  # Error handling
+│   │       ├── SecurityConfig.java        # Spring Security rules
+│   │       ├── JwtUtil.java               # JWT create/validate
+│   │       ├── JwtAuthFilter.java         # JWT request interceptor
+│   │       ├── CustomUserDetailsService.java # Load user from DB
+│   │       ├── CorsConfig.java            # Allow frontend requests
+│   │       └── GlobalExceptionHandler.java# Error handling
 │   ├── src/main/resources/
 │   │   └── application.yml           # App configuration
 │   ├── src/test/                     # Unit and integration tests
 │   ├── Dockerfile                    # How to build the Docker image
 │   └── pom.xml                       # Maven dependencies
 │
+├── frontend/                         # Next.js React application
+│   ├── app/
+│   │   ├── layout.tsx                # Root layout
+│   │   ├── page.tsx                  # Root redirect
+│   │   ├── login/page.tsx            # Login page
+│   │   ├── register/page.tsx         # Register page
+│   │   └── dashboard/page.tsx        # Main task dashboard
+│   ├── lib/
+│   │   └── api.ts                    # Axios API client + types
+│   ├── Dockerfile                    # How to build the frontend image
+│   └── package.json                  # Node dependencies
+│
 ├── k8s/                              # Kubernetes manifests
-│   ├── deployment.yaml               # How to run the app pod
-│   ├── service.yaml                  # How to expose the app externally
-│   ├── configmap.yaml                # Environment variables (non-secret)
+│   ├── deployment.yaml               # Backend pod
+│   ├── service.yaml                  # Backend LoadBalancer
+│   ├── frontend-deployment.yaml      # Frontend pod
+│   ├── frontend-service.yaml         # Frontend LoadBalancer
+│   ├── configmap.yaml                # Non-secret env vars
 │   ├── secret.yaml                   # Sensitive values (gitignored)
 │   ├── hpa.yaml                      # Auto-scaling rules
-│   └── servicemonitor.yaml           # Tells Prometheus where to scrape
+│   ├── servicemonitor.yaml           # Prometheus scrape config
+│   └── prometheus-rules.yaml         # Alert rules
 │
 ├── terraform/                        # Infrastructure as code
 │   ├── modules/
@@ -436,6 +465,90 @@ python scripts/deploy.py --branch main
 
 ---
 
+---
+
+### Phase A — Authentication (Spring Security + JWT)
+
+**What we built:** Full user authentication — register, login, and protected endpoints.
+
+**Key concepts:**
+
+- **JWT (JSON Web Token)** is a small encrypted string that proves who you are. When you log in, the server generates one and gives it to you. On every future request you send it in the `Authorization: Bearer <token>` header. The server validates it without hitting the database again.
+
+- **BCrypt** is a password hashing algorithm. When you register, your password is hashed (scrambled one-way) before being stored. The database never contains your real password — only a hash.
+
+- **Spring Security** is the framework that protects endpoints. We configured it to: allow `/api/auth/**` publicly, and require a valid JWT for everything else.
+
+- **`JwtAuthFilter`** runs on every request before it reaches the controller. It reads the token from the header, validates it, and tells Spring Security who the user is.
+
+- **`CustomUserDetailsService`** loads a user from the database by email. Spring Security calls this internally.
+
+**New endpoints:**
+
+| Method | URL | What it does |
+|--------|-----|--------------|
+| POST | `/api/auth/register` | Create account, returns JWT token |
+| POST | `/api/auth/login` | Login, returns JWT token |
+
+**Tasks now belong to users** — you can only see and modify your own tasks.
+
+---
+
+### Phase B — Frontend (Next.js + React)
+
+**What we built:** A full visual UI at `http://34.77.92.49`.
+
+**Key concepts:**
+
+- **Next.js** is a React framework. React builds the UI components, Next.js handles routing (different pages), building, and serving.
+
+- **Tailwind CSS** lets you style components with utility classes directly in JSX: `className="text-blue-600 font-bold"` instead of writing separate CSS files.
+
+- **Axios** is the HTTP client used to call the backend API from the browser. It has an interceptor that automatically adds the JWT token to every request.
+
+- **localStorage** stores the JWT token in the browser so you stay logged in when you refresh the page.
+
+**Pages:**
+- `/login` — email + password form
+- `/register` — name + email + password form
+- `/dashboard` — task list + detail panel + create form
+
+**How frontend talks to backend:** The browser at `http://34.77.92.49` makes HTTP requests to `http://34.76.76.49/api/...`. CORS (Cross-Origin Resource Sharing) is configured on the backend to allow this — without it the browser would block the requests.
+
+**CI/CD:** The pipeline now builds two Docker images in parallel (backend + frontend) and deploys both.
+
+---
+
+### Phase D — Alerting (Prometheus Alertmanager + Gmail)
+
+**What we built:** Automatic email alerts when something goes wrong.
+
+**How it works:**
+```
+Prometheus detects condition (e.g. pod down)
+        │
+        ▼
+Fires an alert → sends to Alertmanager
+        │
+        ▼
+Alertmanager sends email to mbiondi1188@gmail.com
+```
+
+**Alert rules (`k8s/prometheus-rules.yaml`):**
+
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| SmartOpsAppDown | No healthy pod for 1 minute | Critical |
+| SmartOpsPodRestarting | Pod restarted 3+ times in 10 min | Warning |
+| SmartOpsHighMemory | JVM heap > 400MB for 2 min | Warning |
+| SmartOpsHighErrorRate | 5xx errors > 5% of requests | Warning |
+
+**Alertmanager config** is stored as a Kubernetes Secret (not in git — contains Gmail app password). It uses Gmail SMTP on port 587 with TLS.
+
+**Gmail App Password** — a special 16-character password generated specifically for this integration. Your real Gmail password is never used.
+
+---
+
 ## Recurring Operations (Things You'll Need to Do Again)
 
 ### Starting a new session after terraform destroy
@@ -478,12 +591,14 @@ After `terraform destroy` + `terraform apply`, the Cloud SQL IP changes. You mus
 
 | What | URL |
 |------|-----|
+| **Frontend (main UI)** | `http://34.77.92.49` |
 | REST API | `http://34.76.76.49/api/tasks` |
 | Swagger UI | `http://34.76.76.49/swagger-ui.html` |
 | Health check | `http://34.76.76.49/actuator/health` |
 | Metrics (raw) | `http://34.76.76.49/actuator/prometheus` |
 | Grafana | `http://localhost:3000` (after port-forward) |
 | Prometheus | `http://localhost:9090` (after port-forward) |
+| Prometheus Alerts | `http://localhost:9090/alerts` (after port-forward) |
 
 ### Port-forwarding monitoring tools
 

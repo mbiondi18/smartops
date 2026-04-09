@@ -134,17 +134,30 @@ All pods should show `Running` and `READY`.
 
 ---
 
-### Step 9 — Apply the ServiceMonitor
+### Step 9 — Apply all Kubernetes manifests including ServiceMonitor and alert rules
 
-> Do this after every Helm install (Helm deletes custom resources on reinstall).
+> Do this after every Helm install.
 
 ```
-kubectl apply -f k8s/servicemonitor.yaml
+kubectl apply -f k8s/
 ```
 
 ---
 
-### Step 10 — Commit and push to trigger the pipeline
+### Step 10 — Recreate the Alertmanager config (after every Helm reinstall)
+
+> The Alertmanager secret is not in git — you must recreate it manually each time.
+
+```
+kubectl create secret generic alertmanager-monitoring-kube-prometheus-alertmanager --from-file=alertmanager.yaml=alertmanager-config.yaml -n monitoring
+kubectl rollout restart statefulset/alertmanager-monitoring-kube-prometheus-alertmanager -n monitoring
+```
+
+> Note: `alertmanager-config.yaml` must exist on your machine (it is gitignored). See "Recreating the Alertmanager Config" at the bottom if it's missing.
+
+---
+
+### Step 11 — Commit and push to trigger the pipeline
 
 If you changed `configmap.yaml` (new IP), commit it:
 ```
@@ -164,7 +177,7 @@ Pipeline takes about 3-5 minutes.
 
 ---
 
-### Step 11 — Verify the app is running
+### Step 12 — Verify the app is running
 
 Check the pod status:
 ```
@@ -188,10 +201,11 @@ python scripts/health_check.py
 
 ---
 
-### Step 12 — Access the app
+### Step 13 — Access the app
 
 | What | URL |
 |------|-----|
+| **Frontend (main UI)** | `http://34.77.92.49` |
 | API base | `http://34.76.76.49/api/tasks` |
 | Swagger UI (try endpoints) | `http://34.76.76.49/swagger-ui.html` |
 | Health check | `http://34.76.76.49/actuator/health` |
@@ -204,7 +218,7 @@ python scripts/health_check.py
 
 ---
 
-### Step 13 — Access Grafana (optional)
+### Step 14 — Access Grafana (optional)
 
 Open a second terminal (Google Cloud SDK Shell) and run:
 ```
@@ -227,7 +241,7 @@ The output is base64-encoded. To decode it, paste the output at `https://www.bas
 
 ---
 
-### Step 14 — Access Prometheus (optional)
+### Step 15 — Access Prometheus (optional)
 
 Open another terminal and run:
 ```
@@ -352,6 +366,39 @@ kubectl get service smartops-service
 ```
 
 The `EXTERNAL-IP` column shows the current IP. Update your bookmarks.
+
+---
+
+## Recreating the Alertmanager Config
+
+`alertmanager-config.yaml` is gitignored. If it's missing, create it:
+
+1. Create the file `alertmanager-config.yaml` in the project root with this content:
+   ```yaml
+   global:
+     smtp_smarthost: 'smtp.gmail.com:587'
+     smtp_from: 'mbiondi1188@gmail.com'
+     smtp_auth_username: 'mbiondi1188@gmail.com'
+     smtp_auth_password: 'YOUR-GMAIL-APP-PASSWORD'
+     smtp_require_tls: true
+   route:
+     group_by: ['alertname']
+     group_wait: 30s
+     group_interval: 5m
+     repeat_interval: 12h
+     receiver: email
+   receivers:
+     - name: email
+       email_configs:
+         - to: 'mbiondi1188@gmail.com'
+           send_resolved: true
+   ```
+
+2. Apply it:
+   ```
+   kubectl create secret generic alertmanager-monitoring-kube-prometheus-alertmanager --from-file=alertmanager.yaml=alertmanager-config.yaml -n monitoring
+   kubectl rollout restart statefulset/alertmanager-monitoring-kube-prometheus-alertmanager -n monitoring
+   ```
 
 ---
 
