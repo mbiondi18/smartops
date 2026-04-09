@@ -12,6 +12,7 @@ env:
   REGISTRY: europe-west1-docker.pkg.dev
   REPOSITORY: smartops-hub-project-dev
   IMAGE: smartops-hub
+  FRONTEND_IMAGE: smartops-frontend
   CLUSTER: smartops-hub-project-dev-gke
   CLUSTER_ZONE: europe-west1-b
 
@@ -40,9 +41,9 @@ jobs:
         working-directory: backend
         run: mvn test -pl . -Dtest="TaskControllerIntegrationTest" -DfailIfNoTests=false
 
-  # ─── Stage 2: Build ──────────────────────────────────────────────
-  build:
-    name: Build & Push Image
+  # ─── Stage 2: Build backend ──────────────────────────────────────
+  build-backend:
+    name: Build & Push Backend
     runs-on: ubuntu-latest
     needs: test
     if: github.ref == 'refs/heads/main'
@@ -69,23 +70,60 @@ jobs:
         id: meta
         run: echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
 
-      - name: Build Docker image
+      - name: Build & Push backend image
         working-directory: backend
         run: |
-          docker build -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ steps.meta.outputs.tag }} .
-          docker tag ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ steps.meta.outputs.tag }} \
-            ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:latest
-
-      - name: Push Docker image
-        run: |
+          docker build \
+            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ steps.meta.outputs.tag }} \
+            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:latest \
+            .
           docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ steps.meta.outputs.tag }}
           docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:latest
 
-  # ─── Stage 3: Deploy to dev ──────────────────────────────────────
+  # ─── Stage 3: Build frontend ─────────────────────────────────────
+  build-frontend:
+    name: Build & Push Frontend
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      - name: Set image tag
+        id: meta
+        run: echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Build & Push frontend image
+        working-directory: frontend
+        run: |
+          docker build \
+            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.meta.outputs.tag }} \
+            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.FRONTEND_IMAGE }}:latest \
+            .
+          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.meta.outputs.tag }}
+          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.FRONTEND_IMAGE }}:latest
+
+  # ─── Stage 4: Deploy to GKE ──────────────────────────────────────
   deploy:
     name: Deploy to GKE
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build-backend, build-frontend]
     if: github.ref == 'refs/heads/main'
 
     steps:
@@ -109,10 +147,17 @@ jobs:
             --zone ${{ env.CLUSTER_ZONE }} \
             --project ${{ env.PROJECT_ID }}
 
-      - name: Update image in deployment
+      - name: Apply Kubernetes manifests
+        run: kubectl apply -f k8s/
+
+      - name: Deploy backend
         run: |
           kubectl set image deployment/smartops-app \
-            smartops-app=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ needs.build.outputs.image_tag }}
+            smartops-app=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ needs.build-backend.outputs.image_tag }}
+          kubectl rollout status deployment/smartops-app --timeout=600s
 
-      - name: Wait for rollout
-        run: kubectl rollout status deployment/smartops-app --timeout=600s
+      - name: Deploy frontend
+        run: |
+          kubectl set image deployment/smartops-frontend \
+            smartops-frontend=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.FRONTEND_IMAGE }}:${{ needs.build-frontend.outputs.image_tag }}
+          kubectl rollout status deployment/smartops-frontend --timeout=600s
