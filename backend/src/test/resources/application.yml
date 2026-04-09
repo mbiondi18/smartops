@@ -18,3 +18,7 @@ anthropic:
 ai:
   analysis:
     interval: 999999999
+
+jwt:
+  secret: testsecretkeythatisatleast32characterslong
+  expiration-ms: 86400000

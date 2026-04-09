@@ -2,6 +2,7 @@ package com.smartops.service;
 
 import com.smartops.dto.TaskDTO;
 import com.smartops.model.Task;
+import com.smartops.model.User;
 import com.smartops.repository.TaskRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,9 +30,17 @@ class TaskServiceTest {
     private TaskService taskService;
 
     private Task sampleTask;
+    private User sampleUser;
 
     @BeforeEach
     void setUp() {
+        sampleUser = User.builder()
+                .id(1L)
+                .email("test@example.com")
+                .name("Test User")
+                .password("hashedpassword")
+                .build();
+
         sampleTask = Task.builder()
                 .id(1L)
                 .title("Test Task")
@@ -39,6 +48,7 @@ class TaskServiceTest {
                 .priority(Task.Priority.MEDIUM)
                 .status(Task.Status.PENDING)
                 .aiAnalysed(false)
+                .owner(sampleUser)
                 .build();
     }
 
@@ -48,7 +58,7 @@ class TaskServiceTest {
         TaskDTO.CreateRequest request = new TaskDTO.CreateRequest("Test Task", "Test description", Task.Priority.HIGH);
         when(taskRepository.save(any(Task.class))).thenReturn(sampleTask);
 
-        TaskDTO.Response response = taskService.createTask(request);
+        TaskDTO.Response response = taskService.createTask(request, sampleUser);
 
         assertThat(response).isNotNull();
         assertThat(response.getTitle()).isEqualTo("Test Task");
@@ -56,22 +66,22 @@ class TaskServiceTest {
     }
 
     @Test
-    @DisplayName("Should return all tasks")
+    @DisplayName("Should return all tasks for the user")
     void getAllTasks_ReturnsList() {
-        when(taskRepository.findAll()).thenReturn(List.of(sampleTask));
+        when(taskRepository.findByOwner(sampleUser)).thenReturn(List.of(sampleTask));
 
-        List<TaskDTO.Response> tasks = taskService.getAllTasks();
+        List<TaskDTO.Response> tasks = taskService.getAllTasks(sampleUser);
 
         assertThat(tasks).hasSize(1);
         assertThat(tasks.get(0).getTitle()).isEqualTo("Test Task");
     }
 
     @Test
-    @DisplayName("Should return task by ID")
+    @DisplayName("Should return task by ID for the owner")
     void getTaskById_Found() {
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(sampleTask));
+        when(taskRepository.findByIdAndOwner(1L, sampleUser)).thenReturn(Optional.of(sampleTask));
 
-        TaskDTO.Response response = taskService.getTaskById(1L);
+        TaskDTO.Response response = taskService.getTaskById(1L, sampleUser);
 
         assertThat(response.getId()).isEqualTo(1L);
         assertThat(response.getTitle()).isEqualTo("Test Task");
@@ -80,9 +90,9 @@ class TaskServiceTest {
     @Test
     @DisplayName("Should throw EntityNotFoundException when task not found")
     void getTaskById_NotFound() {
-        when(taskRepository.findById(99L)).thenReturn(Optional.empty());
+        when(taskRepository.findByIdAndOwner(99L, sampleUser)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> taskService.getTaskById(99L))
+        assertThatThrownBy(() -> taskService.getTaskById(99L, sampleUser))
                 .isInstanceOf(EntityNotFoundException.class)
                 .hasMessageContaining("99");
     }
@@ -93,10 +103,10 @@ class TaskServiceTest {
         TaskDTO.UpdateRequest request = new TaskDTO.UpdateRequest(
                 "Updated Title", null, Task.Priority.HIGH, Task.Status.IN_PROGRESS, null);
 
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(sampleTask));
+        when(taskRepository.findByIdAndOwner(1L, sampleUser)).thenReturn(Optional.of(sampleTask));
         when(taskRepository.save(any(Task.class))).thenReturn(sampleTask);
 
-        taskService.updateTask(1L, request);
+        taskService.updateTask(1L, request, sampleUser);
 
         verify(taskRepository).save(argThat(task ->
                 task.getTitle().equals("Updated Title") &&
@@ -107,9 +117,9 @@ class TaskServiceTest {
     @Test
     @DisplayName("Should delete task successfully")
     void deleteTask_Success() {
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(sampleTask));
+        when(taskRepository.findByIdAndOwner(1L, sampleUser)).thenReturn(Optional.of(sampleTask));
 
-        taskService.deleteTask(1L);
+        taskService.deleteTask(1L, sampleUser);
 
         verify(taskRepository).delete(sampleTask);
     }

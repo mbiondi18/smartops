@@ -48,6 +48,10 @@ public class Task {
     @Builder.Default
     private Boolean aiAnalysed = false;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User owner;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

@@ -25,6 +25,16 @@ springdoc:
     path: /swagger-ui.html
   api-docs:
     path: /api-docs
+  components:
+    security-schemes:
+      bearerAuth:
+        type: http
+        scheme: bearer
+        bearerFormat: JWT
+
+jwt:
+  secret: ${JWT_SECRET:supersecretkeythatisatleast32characterslong}
+  expiration-ms: 86400000 # 24 hours
 
 management:
   endpoints:
