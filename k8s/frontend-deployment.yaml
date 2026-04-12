@@ -25,7 +25,7 @@ spec:
             - containerPort: 3000
           env:
             - name: NEXT_PUBLIC_API_URL
-              value: "http://34.76.76.49"
+              value: "http://146.148.27.168"
           readinessProbe:
             httpGet:
               path: /
