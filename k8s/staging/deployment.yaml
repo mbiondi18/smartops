@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smartops-app
+  namespace: staging
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: smartops-app
+  template:
+    metadata:
+      labels:
+        app: smartops-app
+    spec:
+      containers:
+        - name: smartops-app
+          image: europe-west1-docker.pkg.dev/smartops-hub-project/smartops-hub-project-dev/smartops-hub:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: smartops-config
+            - secretRef:
+                name: smartops-secrets
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

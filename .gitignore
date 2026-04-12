@@ -21,6 +21,7 @@ backend/target/
 
 # Kubernetes secrets
 k8s/secret.yaml
+k8s/staging/secret.yaml
 alertmanager-config.yaml
 
 # Environment files
