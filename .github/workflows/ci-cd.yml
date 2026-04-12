@@ -119,9 +119,9 @@ jobs:
           docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.meta.outputs.tag }}
           docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.FRONTEND_IMAGE }}:latest
 
-  # ─── Stage 4: Deploy to STAGING ──────────────────────────────────
-  deploy-staging:
-    name: Deploy to Staging
+  # ─── Stage 4: Deploy to production ───────────────────────────────
+  deploy:
+    name: Deploy to Production
     runs-on: ubuntu-latest
     needs: [build-backend, build-frontend]
     if: github.ref == 'refs/heads/main'
@@ -147,42 +147,31 @@ jobs:
             --zone ${{ env.CLUSTER_ZONE }} \
             --project ${{ env.PROJECT_ID }}
 
-      - name: Apply staging manifests
-        run: kubectl apply -f k8s/staging/
+      - name: Apply Kubernetes manifests
+        run: kubectl apply -f k8s/
 
-      - name: Copy secret to staging namespace
-        run: |
-          kubectl get secret smartops-secrets -n default -o json \
-            | jq 'del(.metadata.namespace, .metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp)' \
-            | kubectl apply -n staging -f -
-
-      - name: Deploy backend to staging
+      - name: Deploy backend
         run: |
           kubectl set image deployment/smartops-app \
             smartops-app=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ needs.build-backend.outputs.image_tag }} \
-            -n staging
-          kubectl rollout status deployment/smartops-app -n staging --timeout=300s
+            -n default
+          kubectl rollout status deployment/smartops-app -n default --timeout=600s
 
-      - name: Verify staging health
+      - name: Deploy frontend
         run: |
-          echo "Waiting for staging to stabilise..."
-          sleep 30
-          STAGING_IP=$(kubectl get service smartops-service -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-          echo "Staging IP: $STAGING_IP"
-          curl -f http://$STAGING_IP/actuator/health || exit 1
-          echo "Staging is healthy"
+          kubectl set image deployment/smartops-frontend \
+            smartops-frontend=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.FRONTEND_IMAGE }}:${{ needs.build-frontend.outputs.image_tag }} \
+            -n default
+          kubectl rollout status deployment/smartops-frontend -n default --timeout=600s
 
-  # ─── Stage 5: Deploy to PRODUCTION ───────────────────────────────
-  deploy-production:
-    name: Deploy to Production
+  # ─── Stage 5: Smoke test ─────────────────────────────────────────
+  smoke-test:
+    name: Smoke Test
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend, deploy-staging]
+    needs: deploy
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
@@ -200,19 +189,19 @@ jobs:
             --zone ${{ env.CLUSTER_ZONE }} \
             --project ${{ env.PROJECT_ID }}
 
-      - name: Apply production manifests
-        run: kubectl apply -f k8s/
-
-      - name: Deploy backend to production
+      - name: Run health check
         run: |
-          kubectl set image deployment/smartops-app \
-            smartops-app=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ needs.build-backend.outputs.image_tag }} \
-            -n default
-          kubectl rollout status deployment/smartops-app -n default --timeout=600s
+          BACKEND_IP=$(kubectl get service smartops-service -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Backend IP: $BACKEND_IP"
+          curl -f http://$BACKEND_IP/actuator/health
+          echo "Health check passed"
 
-      - name: Deploy frontend to production
+      - name: Run API smoke test
         run: |
-          kubectl set image deployment/smartops-frontend \
-            smartops-frontend=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.FRONTEND_IMAGE }}:${{ needs.build-frontend.outputs.image_tag }} \
-            -n default
-          kubectl rollout status deployment/smartops-frontend -n default --timeout=600s
+          BACKEND_IP=$(kubectl get service smartops-service -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Testing register endpoint..."
+          curl -f -X POST http://$BACKEND_IP/api/auth/register \
+            -H "Content-Type: application/json" \
+            -d '{"name":"CI Bot","email":"ci-bot-${{ github.sha }}@test.com","password":"testpass123"}' \
+            | grep -q "token"
+          echo "API smoke test passed"

@@ -96,7 +96,7 @@ Verify it works:
 kubectl get nodes
 ```
 
-You should see one node listed as `Ready`.
+You should see two nodes listed as `Ready`.
 
 ---
 
@@ -112,7 +112,25 @@ This creates/updates the deployment, service, configmap, HPA, and ServiceMonitor
 
 ---
 
-### Step 8 — Install Prometheus + Grafana (Helm)
+### Step 8 — Apply staging namespace and manifests
+
+> Skip this step if the staging namespace still exists from a previous session (Option B destroy keeps namespaces since they are in-cluster).
+
+```
+kubectl apply -f k8s/staging/namespace.yaml
+kubectl apply -f k8s/staging/
+```
+
+Copy the secret to the staging namespace:
+```
+kubectl get secret smartops-secrets -n default -o json \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); [d['metadata'].pop(k,None) for k in ['namespace','resourceVersion','uid','creationTimestamp']]; print(json.dumps(d))" \
+  | kubectl apply -n staging -f -
+```
+
+---
+
+### Step 9 — Install Prometheus + Grafana (Helm)
 
 > Skip this step if you did NOT destroy last time (Helm release still exists).
 
@@ -132,7 +150,7 @@ All pods should show `Running` and `READY`.
 
 ---
 
-### Step 9 — Apply all Kubernetes manifests including ServiceMonitor and alert rules
+### Step 10 — Apply all Kubernetes manifests including ServiceMonitor and alert rules
 
 > Do this after every Helm install.
 
@@ -142,7 +160,7 @@ kubectl apply -f k8s/
 
 ---
 
-### Step 10 — Recreate the Alertmanager config (after every Helm reinstall)
+### Step 11 — Recreate the Alertmanager config (after every Helm reinstall)
 
 > The Alertmanager secret is not in git — you must recreate it manually each time.
 
@@ -155,7 +173,7 @@ kubectl rollout restart statefulset/alertmanager-monitoring-kube-prometheus-aler
 
 ---
 
-### Step 11 — Commit and push to trigger the pipeline
+### Step 12 — Commit and push to trigger the pipeline
 
 If you changed `configmap.yaml` (new IP), commit it:
 ```
@@ -175,7 +193,7 @@ Pipeline takes about 3-5 minutes.
 
 ---
 
-### Step 12 — Verify the app is running
+### Step 13 — Verify the app is running
 
 Check the pod status:
 ```
@@ -199,7 +217,7 @@ python scripts/health_check.py
 
 ---
 
-### Step 13 — Access the app
+### Step 14 — Access the app
 
 | What | URL |
 |------|-----|
@@ -216,7 +234,7 @@ python scripts/health_check.py
 
 ---
 
-### Step 14 — Access Grafana (optional)
+### Step 15 — Access Grafana (optional)
 
 Open a second terminal (Google Cloud SDK Shell) and run:
 ```
@@ -239,7 +257,7 @@ The output is base64-encoded. To decode it, paste the output at `https://www.bas
 
 ---
 
-### Step 15 — Access Prometheus (optional)
+### Step 16 — Access Prometheus (optional)
 
 Open another terminal and run:
 ```

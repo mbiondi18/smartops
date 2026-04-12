@@ -26,7 +26,7 @@ variable "subnet_name" {
 variable "node_count" {
   description = "Initial number of nodes"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "max_node_count" {
