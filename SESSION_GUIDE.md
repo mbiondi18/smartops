@@ -58,17 +58,15 @@ cd C:\Users\Miguel\Documents\Practice-Project\smartops-hub-phase1\smartops-hub
 
 ---
 
-### Step 4 — Get the new Cloud SQL IP
+### Step 4 — Get the Cloud SQL IP
 
-> Do this every time after a `terraform apply`. The IP changes each time.
+> The IP only changes if you did a full `terraform destroy`. If you used Option B (destroy GKE only), the IP stays the same — skip to Step 5.
 
 ```
 gcloud sql instances describe smartops-hub-project-dev-db --project=smartops-hub-project --format="value(ipAddresses[0].ipAddress)"
 ```
 
-Copy the IP address from the output.
-
-Open `k8s/configmap.yaml` and update the `SPRING_DATASOURCE_URL` line:
+If the IP is different from what's in `k8s/configmap.yaml`, update it:
 ```yaml
 SPRING_DATASOURCE_URL: jdbc:postgresql://<NEW-IP>:5432/smartops
 ```
@@ -267,11 +265,31 @@ GCP will charge you for:
 
 ---
 
-### Option B — Destroy everything (recommended to save money)
+### Option B — Destroy GKE only, keep database (RECOMMENDED)
 
-> This deletes all GCP resources. Your code stays safe in Git.
+This saves ~90% of the cost while keeping your data. The database costs only ~$0.36/day.
 
-**Step 1** — Destroy Terraform resources:
+```
+cd terraform/environments/dev
+terraform destroy -target=module.kubernetes -target=module.networking
+```
+
+Type `yes` when prompted. Takes 5-10 minutes.
+
+This destroys:
+- ✅ GKE cluster (expensive — ~$0.05/hour)
+- ✅ VPC/networking
+- ❌ Database (kept — your data survives)
+- ❌ Artifact Registry (kept — your images survive)
+
+**Next session:** Run `terraform apply` normally — it will recreate only what's missing. The database already exists so Terraform skips it.
+
+---
+
+### Option C — Destroy everything (wipes all data)
+
+Only use this if you want a completely clean slate.
+
 ```
 cd terraform/environments/dev
 terraform destroy
@@ -279,16 +297,7 @@ terraform destroy
 
 Type `yes` when prompted. Takes 10-15 minutes.
 
-> If you get an error about deleting the database user, it means Terraform is trying to delete the user before the database. Just run `terraform destroy` again — it usually succeeds on the second attempt.
-
-**Step 2** — Verify everything is deleted in the GCP Console:
-- Go to `https://console.cloud.google.com`
-- Check: Kubernetes Engine → Clusters (should be empty)
-- Check: SQL → Instances (should be empty)
-
-**Step 3** — Close all terminals.
-
-> Your Docker images in Artifact Registry are NOT deleted by terraform destroy. They stay there and cost a small amount (cents/month). Use `scripts/cleanup.py` to delete old ones.
+> If you get an error about deleting the database user, run `terraform destroy` again — it usually succeeds on the second attempt.
 
 ---
 
