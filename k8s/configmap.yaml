@@ -5,7 +5,7 @@ metadata:
   namespace: default
 data:
   SPRING_APPLICATION_NAME: smartops-hub
-  SPRING_DATASOURCE_URL: jdbc:postgresql://104.199.34.223:5432/smartops
+  SPRING_DATASOURCE_URL: jdbc:postgresql://35.205.232.148:5432/smartops
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
   ANTHROPIC_API_ENABLED: "true"
   ANTHROPIC_MODEL: claude-haiku-4-5-20251001
