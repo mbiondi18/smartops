@@ -1,0 +1,12 @@
+smartops_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth              # uses the mounted ADC credentials
+      project: smartops-hub-2026
+      dataset: smartops_analytics
+      location: europe-west1
+      threads: 1
+      job_execution_timeout_seconds: 300
+      job_retries: 1

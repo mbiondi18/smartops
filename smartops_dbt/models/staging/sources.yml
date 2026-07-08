@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: smartops_analytics
+    database: smartops-hub-2026
+    schema: smartops_analytics
+    tables:
+      - name: tasks_raw

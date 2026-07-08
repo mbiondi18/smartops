@@ -9,7 +9,7 @@ terraform {
   }
 
   backend "gcs" {
-    bucket = "smartops-hub-project-tfstate"
+    bucket = "smartops-hub-2026-tfstate"
     prefix = "dev"
   }
 }

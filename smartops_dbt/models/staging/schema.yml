@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: stg_tasks
+    description: "Cleaned, standardized task data — one row per task."
+    columns:
+      - name: id
+        description: "Primary key of the task."
+        tests:
+          - unique
+          - not_null
+
+      - name: status
+        description: "Task lifecycle state."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['pending', 'in_progress', 'done', 'archived']
+
+      - name: priority
+        description: "Task priority."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['low', 'medium', 'high']
+
+      - name: owner_email
+        description: "Email of the task owner."
+        tests:
+          - not_null
+
+      - name: category
+        description: "Task category — populated asynchronously by the AI analysis job, so newly-created tasks are briefly null. Warn (don't fail) so we stay visible without breaking the pipeline."
+        tests:
+          - not_null:
+              config:
+                severity: warn

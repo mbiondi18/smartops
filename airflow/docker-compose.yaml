@@ -1,0 +1,18 @@
+services:
+  airflow:
+    build: .
+    container_name: smartops-airflow
+    ports:
+      - "8081:8080"          # UI on host :8081 (8080 is the Spring Boot app)
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      GOOGLE_APPLICATION_CREDENTIALS: /opt/creds/adc.json
+      GCP_PROJECT: smartops-hub-2026
+      PGHOST: host.docker.internal   # reach the Postgres running on the host
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ..:/opt/project           # mounts the whole SmartOps project
+      - "C:/Users/Miguel/AppData/Roaming/gcloud/application_default_credentials.json:/opt/creds/adc.json:ro"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: standalone
